@@ -1,0 +1,936 @@
+<html>
+
+<head>
+ <script src="js/three.min.js"></script>
+ <script src="js/three.js"></script>
+ <script src="js/OrbitControls.js"></script>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/2.1.2/TweenMax.min.js"></script>
+ <script src='js/threex.domevents.js'></script>
+ <script src="js/OBJLoader.js"></script>
+ <script src="js/MTLLoader.js"></script>
+ <script src="js/GLTFLoader.js"></script>
+
+ <style>
+    body {
+        margin: 0px;
+        background-color:  #f1f7ff;
+        overflow: hidden;
+    }
+</style>
+
+    <meta charset="utf-8">
+    
+    <link rel="stylesheet" href="css/main.css">
+</head>
+
+<body>
+	<script>
+
+        // The status display plugin in the upper left corner is meaningless, personal preference hahahaahahaha.
+        (function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='//mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
+        
+
+        // Create a new Three.js Scene
+        var scene = new THREE.Scene();
+        // 🤪 London need fog
+        scene.fog = new THREE.Fog(0xf1f7ff, 100, 950);
+
+        
+        // Create a new Perspective Camera and set the camera position
+        var camera = new THREE.PerspectiveCamera( 68,window.innerWidth/window.innerHeight,0.1,1000 )
+        camera.position.z = 160;
+        camera.position.y = 80;
+        //camera.position.x = 200;
+
+
+        // Create a Full Screen WebGL Renderer
+        //var renderer = new THREE.WebGLRenderer();
+        var renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
+        renderer.setSize(window.innerWidth,window.innerHeight);
+
+        document.body.appendChild(renderer.domElement);
+        
+        // Make sure the project is responsive based on window resizing
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth,window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        })
+
+
+        //add ObritControl to help adjusting scene during the develop.
+        controls = new THREE.OrbitControls (camera, renderer.domElement);
+        controls.minDistance = 1;
+        controls.maxDistance = 500;
+
+
+        // Add lights
+        var pointlight = new THREE.PointLight( 0xFFFFFF, .1, 1000)
+        pointlight.position.set( 0, 160, 320 );
+
+        // A light source positioned directly above the scene, in my scene, improve the color perfermance.
+        var hemisphereLight = new THREE.HemisphereLight( 0xf1f7ff,0x000000, 1);
+
+        // like sunlight
+        var directionalLight = new THREE.DirectionalLight(0xFFFFFF, 1)
+        directionalLight.position.set(0, 1600, 3200);
+        
+        var AmbientLight = new THREE.AmbientLight( 0x404040 ); // soft white light 
+        
+        scene.add( directionalLight );
+        // scene.add( pointlight );
+        scene.add( hemisphereLight );
+        scene.add( AmbientLight );
+
+
+        // Set the value of each color to facilitate later modification.
+        var Colors = {
+            roadside:0x23190f,
+            river:0x2A5484,
+            busred:0xC12220,
+            boxred:0xC42522,
+        };
+
+
+        // create the road for the bus by using a cylindergeometry and map the pic 
+        var road = new THREE.CylinderGeometry( 820, 820, 140, 88, 10 );
+        var roadmaterial = [
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/Highway.png '),shading:THREE.FlatShading, shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({ color:Colors.roadside, shading:THREE.FlatShading,}),
+            new THREE.MeshPhongMaterial({color:Colors.roadside,transparent:true,opacity:0.40,shading:THREE.FlatShading,})
+            ]           
+        // var roadmaterial = new THREE.MeshPhongMaterial({color:Colors.roadside,transparent:true,opacity:0.68,shading:THREE.FlatShading,});
+        this.roadmesh = new THREE.Mesh(road, roadmaterial);
+        this.roadmesh.receiveShadow = true; 
+        roadmesh.position.set(0,-850,-150);
+        scene.add(roadmesh); 
+        roadmesh.rotation.x = - Math.PI * 0.5;
+
+
+
+        //create busbox with rounded rectangle
+        var buswidth = 200, busheight = 100, busdepth = 50;
+        var roundCornerWidth = roundCornerHeight = 15;
+        var helpWidth = buswidth - 2*roundCornerWidth,
+        helpHeight = busheight - 2*roundCornerHeight;
+
+        var boxGeometry = new THREE.BoxGeometry(buswidth, busheight, busdepth, 100, 50, 10);
+        boxGeometry.vertices.forEach(v => {
+            if(Math.abs(v.x)>helpWidth/2){
+                if(Math.abs(v.y)>helpHeight/2){
+                    let helperX = Math.abs(v.x)-helpWidth/2;
+                    let helperY2 = (Math.abs(v.y)-helpHeight/2)/roundCornerHeight;
+                    let helperY = (1-helperX/roundCornerWidth) * roundCornerHeight * helperY2;
+                    v.y = Math.sign(v.y)*((helpHeight/2 + helperY)+(Math.sin(helperX/roundCornerWidth * Math.PI)*(roundCornerHeight/4))*helperY2);
+                    v.x = Math.sign(v.x)*(Math.abs(v.x)+(Math.sin(helperX/roundCornerWidth * Math.PI)*(roundCornerWidth/4))*helperY2);
+                }
+            }
+        });
+
+        //map the pic into the london bus
+        var busmaterial =     [
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/londonbusright.png '), side: THREE.DoubleSide}),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/londonbusleft.png '), side: THREE.DoubleSide}),
+            new THREE.MeshBasicMaterial({color: Colors.busred, side: THREE.FrontSide}),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/bottom.png '), side: THREE.DoubleSide}),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/londonbusfront.png '), side: THREE.DoubleSide}),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/londonbusback.png '), side: THREE.DoubleSide}),
+        ];
+
+        var busmesh = new THREE.Mesh(boxGeometry, busmaterial);
+
+        // create the bus wheels
+        var wheel = new THREE.CylinderGeometry(12,12,12,32);
+        var wheelmaterial = [
+            new THREE.MeshBasicMaterial({color:0x000000,shading:THREE.FlatShading, shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/buswheel.png '), color:0xC12220, shading:THREE.FlatShading,})
+            ]
+        var wheelmesh = new THREE.Mesh(wheel, wheelmaterial);
+        wheelmesh.position.set(-50,-44,25);
+        wheelmesh.rotation.x = Math.PI * .5;
+
+        // // other wheels
+        var wheelmesh1 = new THREE.Mesh(wheel, wheelmaterial);
+        wheelmesh1.position.set(52,-44,25);
+        wheelmesh1.rotation.x = Math.PI * .5;
+
+        var wheelmesh2 = new THREE.Mesh(wheel, wheelmaterial);
+        wheelmesh2.position.set(-50,-44,-25);
+        wheelmesh2.rotation.x = Math.PI * 1.5;
+
+        var wheelmesh3 = new THREE.Mesh(wheel, wheelmaterial);
+        wheelmesh3.position.set(52,-44,-25);
+        wheelmesh3.rotation.x = Math.PI * 1.5;
+
+
+        // group the busbox and wheels
+        var busgroup = new THREE.Group();
+        busgroup.add( wheelmesh );
+        busgroup.add( wheelmesh1 );
+        busgroup.add( wheelmesh2 );
+        busgroup.add( wheelmesh3 );
+        busgroup.add( busmesh );
+
+        scene.add( busgroup );
+        busgroup.position.set(0, 30, -100);
+        busgroup.scale.set( 0.5, 0.5, 0.5 );
+
+        // timelineMax to create busgroup move
+        function busplay(){
+            this.tl = new TimelineMax().delay(.3);
+            this.tl.to(busgroup.rotation, 1, { z:.1, ease: Expo.easeOut})
+            this.tl.to(busgroup.position, 1, { y: 50,  ease: Expo.easeOut},'-2') 
+            this.tl.to(busgroup.rotation, 1, { z:-.1, ease: Expo.easeOut})
+            this.tl.to(busgroup.position, 1, { y: 10,  ease: Expo.easeOut},'-2') 
+            this.tl.to(busgroup.rotation, 1, { z:.1, ease: Expo.easeOut})
+            this.tl.to(busgroup.rotation, 1, { z:-.1, ease: Expo.easeOut})  
+        }
+        //busplay();   put the busplay fucntion into the render()
+
+
+
+        // create the postboxs model after give up lard the 3D model file
+        var box1 = new THREE.CylinderGeometry(6,6,27,32);
+        var box1material = new THREE.MeshBasicMaterial({color:Colors.boxred, shading:THREE.FlatShading, }),
+            // new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/buswheel.png '),  shading:THREE.FlatShading,})
+        box1mesh = new THREE.Mesh(box1, box1material);
+        box1mesh.position.set(52,-44,12);
+            box1mesh.rotation.y = Math.PI;
+        // scene.add( box1mesh );
+
+        var box2 = new THREE.CylinderGeometry(7,7,7,32);
+        var box2material = new THREE.MeshBasicMaterial({color:0x000000, shading:THREE.FlatShading, }),
+        box2mesh = new THREE.Mesh(box2, box2material);
+        box2mesh.position.set(52,-55,12);
+        // testmesh.rotation.x = Math.PI * .5;
+        // scene.add( box2mesh );
+
+        var box3 = new THREE.BoxGeometry(3.5 ,7 ,.5 );
+        var box3material = new THREE.MeshBasicMaterial({color:0xffffff, shading:THREE.FlatShading, }),
+        box3mesh = new THREE.Mesh(box3, box3material);
+        box3mesh.position.set(52,-41,18);
+        // testmesh.rotation.x = Math.PI * .5;
+        // scene.add( box3mesh );
+
+        var box4 = new THREE.BoxGeometry(4.5 ,1.5 ,.5);
+        var box4material = new THREE.MeshBasicMaterial({color:0x000000, shading:THREE.FlatShading, }),
+        box4mesh = new THREE.Mesh(box4, box4material);
+        box4mesh.position.set(52,-36,18);
+        // testmesh.rotation.x = Math.PI * .5;
+        // scene.add( box4mesh );
+
+        var box5 = new THREE.SphereBufferGeometry( 9, 32, 32, 0, Math.PI ,0 ,Math.PI );
+        // var box5material = new THREE.MeshBasicMaterial( {map: new THREE.TextureLoader().load(' pic/buswheel.png ')} );
+        var box5material = new THREE.MeshBasicMaterial( {color:Colors.boxred} );
+        var box5mesh = new THREE.Mesh( box5, box5material );
+        // scene.add( box5mesh );
+        box5mesh.position.set(52,-29.5 ,12);
+        box5mesh.scale.z = .3;
+        box5mesh.rotation.x = -Math.PI * 0.5;
+
+        var box6 = new THREE.CylinderGeometry(9 ,9 ,1.5 ,32);
+        var box6material = new THREE.MeshBasicMaterial({color:Colors.boxred, shading:THREE.FlatShading, }),
+        box6mesh = new THREE.Mesh(box6, box6material);
+        box6mesh.position.set(52,-30 ,12);
+        var boxgroup = new THREE.Group();
+        boxgroup.add( box1mesh );
+        boxgroup.add( box2mesh );
+        boxgroup.add( box3mesh );
+        boxgroup.add( box4mesh );
+        boxgroup.add( box5mesh );
+        boxgroup.add( box6mesh );
+        scene.add( boxgroup );
+        // boxgroup.scale.set(2, 2, 2 );
+        boxgroup.position.set(-288 , 0, -120);
+        boxgroup.rotation.z = .3;
+
+
+
+        // create another postbox
+        // var mesh = new THREE.Mesh(boxgroup.clone(), boxgroup.clone());
+        // // Mesh positioning
+        // scene.add(mesh);
+        // mesh.position.set(0,0,0);
+        var box1 = new THREE.CylinderGeometry(6,6,27,32);
+        var box1material = new THREE.MeshBasicMaterial({color:Colors.boxred, shading:THREE.FlatShading, }),
+        box1mesh = new THREE.Mesh(box1, box1material);
+        box1mesh.position.set(52,-44,12);
+        box1mesh.rotation.y = Math.PI;
+        var box2 = new THREE.CylinderGeometry(7,7,7,32);
+        var box2material = new THREE.MeshBasicMaterial({color:0x000000, shading:THREE.FlatShading, }),
+        box2mesh = new THREE.Mesh(box2, box2material);
+        box2mesh.position.set(52,-55,12);
+        var box3 = new THREE.BoxGeometry(3.5 ,7 ,.5 );
+        var box3material = new THREE.MeshBasicMaterial({color:0xffffff, shading:THREE.FlatShading, }),
+        box3mesh = new THREE.Mesh(box3, box3material);
+        box3mesh.position.set(52,-41,18);
+        var box4 = new THREE.BoxGeometry(4.5 ,1.5 ,.5);
+        var box4material = new THREE.MeshBasicMaterial({color:0x000000, shading:THREE.FlatShading, }),
+        box4mesh = new THREE.Mesh(box4, box4material);
+        box4mesh.position.set(52,-36,18);
+        var box5 = new THREE.SphereBufferGeometry( 9, 32, 32, 0, Math.PI ,0 ,Math.PI );
+        var box5material = new THREE.MeshBasicMaterial( {color:Colors.boxred} );
+        var box5mesh = new THREE.Mesh( box5, box5material );
+        box5mesh.position.set(52,-29.5 ,12);
+        box5mesh.scale.z = .3;
+        box5mesh.rotation.x = -Math.PI * 0.5;
+        var box6 = new THREE.CylinderGeometry(9 ,9 ,1.5 ,32);
+        var box6material = new THREE.MeshBasicMaterial({color:Colors.boxred, shading:THREE.FlatShading, }),
+        box6mesh = new THREE.Mesh(box6, box6material);
+        box6mesh.position.set(52,-30 ,12);
+        var boxgroup = new THREE.Group();
+        boxgroup.add( box1mesh );
+        boxgroup.add( box2mesh );
+        boxgroup.add( box3mesh );
+        boxgroup.add( box4mesh );
+        boxgroup.add( box5mesh );
+        boxgroup.add( box6mesh );
+        scene.add( boxgroup );
+        boxgroup.position.set(200 , 21 ,-120);
+        boxgroup.rotation.z = -.3;
+
+
+
+
+
+
+        var boxplay = new THREE.BoxGeometry(20 ,20 ,20 );
+        var boxplaymaterial = new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/play.png '), shading:THREE.FlatShading, });
+        boxplaymesh = new THREE.Mesh(boxplay, boxplaymaterial);
+        boxplaymesh.position.set(200, 48, 68);
+        scene.add( boxplaymesh );
+
+        // create the tlm for playbox
+        function boxplaytl(){
+            this.boxplaytl = new TimelineMax();
+            this.boxplaytl.to(boxplaymesh.scale, .2, { x:.8, y:.8, z:.8, ease: Expo.easeOut})
+            this.boxplaytl.to(boxplaymesh.scale, .2, { x:1, y:1, z:1, ease: Expo.easeOut})
+            this.boxplaytl.to(boxplaymesh.position, 1.6, { x:-888, ease: Expo.easeOut})
+        }
+
+
+        // create the welcome box for intro
+        var welcome = new THREE.BoxGeometry(170 ,86 ,86 );
+        var welcomematerial = [
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/welcome1.png '), shading:THREE.FlatShading, }),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/welcome1.png '), shading:THREE.FlatShading, }),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/welcome4.png '), shading:THREE.FlatShading, }),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/welcome2.png '), shading:THREE.FlatShading, }),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/welcome3.png '), shading:THREE.FlatShading, }),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/welcome1.png '), shading:THREE.FlatShading, }),
+        ]
+        welcomemesh = new THREE.Mesh(welcome, welcomematerial);
+        welcomemesh.rotation.x = Math.PI*.855;
+        welcomemesh.position.set(0 ,36 ,68);
+        scene.add( welcomemesh );
+
+        // create timeline for welcome
+        function welcometl(){
+            this.welcometl = new TimelineMax().delay(6);
+            this.welcometl.to(welcomemesh.rotation, 1, { x: Math.PI*.855 +Math.PI*.5, ease: Expo.easeOut})
+            this.welcometl.to(welcomemesh.position, 1, { x:-288, y:80, z:80, ease: Expo.easeOut},'8')
+            this.welcometl.to(welcomemesh.rotation, 1, { x: Math.PI*.855 +Math.PI, ease: Expo.easeOut})
+            this.welcometl.to(welcomemesh.position, 1, { x:0, y:36, z:68, ease: Expo.easeOut},)
+            this.welcometl.to(welcomemesh.position, 2, { x:0, y:36, z:68, ease: Expo.easeOut},)
+            this.welcometl.to(welcomemesh.rotation, 2, { x: Math.PI*.855 +Math.PI*1.5, ease: Expo.easeOut},)
+            this.welcometl.to(welcomemesh.rotation, 3, { x: Math.PI*.855 +Math.PI*1.5, ease: Expo.easeOut},)
+            this.welcometl.to(welcomemesh.position, 1, { x:-888, y:80, z:80, ease: Expo.easeOut},)
+            this.welcometl.to(boxplaymesh.position, 1, { x:0, y:48, z:68, ease: Expo.easeOut})
+        }
+        welcometl();
+
+
+
+        // create tips box for interaction
+        var boxanima = new THREE.BoxGeometry(20 ,20 ,20 );
+        var boxanimamaterial = [
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box12.png '), shading:THREE.FlatShading, }),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box12.png '), shading:THREE.FlatShading, }),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box13.png '), shading:THREE.FlatShading, }),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box13.png '), shading:THREE.FlatShading, }),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box11.png '), shading:THREE.FlatShading, }),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/fact1.png '), shading:THREE.FlatShading, }),
+        ]      
+        boxanimamesh1 = new THREE.Mesh(boxanima, boxanimamaterial);
+        boxanimamesh1.position.set(-88 ,-32 ,68);
+        scene.add( boxanimamesh1 );
+
+        function boxtl1(){
+            this.boxtl1 = new TimelineMax();//32s gap for welcome page
+            this.boxtl1.to(boxanimamesh1.scale, .2, { x:.8, y:.8, z:.8, ease: Expo.easeOut})
+            this.boxtl1.to(boxanimamesh1.scale, .2, { x:1, y:1, z:1, ease: Expo.easeOut})
+            this.boxtl1.to(boxanimamesh1.position, 1, { x:0, y:40, z:60, ease: Expo.easeOut},)
+            this.boxtl1.to(boxanimamesh1.rotation, .5, { x: Math.PI*.855, ease: Expo.easeOut},'.5')
+            this.boxtl1.to(boxanimamesh1.scale, 1, { y: 4, x: 8, z: .1,  ease: Expo.easeOut},) 
+            this.boxtl1.to(boxanimamesh1.scale, 6, { y: 4, x: 8, z: .1,  ease: Expo.easeOut},) 
+            this.boxtl1.to(boxanimamesh1.scale, .5, { y: 1, x: 1, z: 1,  ease: Expo.easeOut},) 
+            this.boxtl1.to(boxanimamesh1.rotation, .5, { x: 0, ease: Expo.easeOut})
+            this.boxtl1.to(boxanimamesh1.position, .5, { x:-88, y:-32, z:68, ease: Expo.easeOut})
+            // this.boxtl1.to(busgroup.position, .5,{ x:0, y:-320000, z:-10, ease: Expo.easeOut},'-2')
+            // var test = 1 ;
+            // if (test == 2) {
+            //     scene.remove( boxanimamesh1 );
+            // }
+        }
+        // boxtl1();
+
+
+        var boxanima = new THREE.BoxGeometry(20 ,20 ,20 );
+        var boxanimamaterial = [
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box21.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box21.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box22.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box23.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box21.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/fact2.png '), shading:THREE.FlatShading, }),
+            ]
+        boxanimamesh2 = new THREE.Mesh(boxanima, boxanimamaterial);
+        boxanimamesh2.position.set(-30 ,-32 ,68);
+        scene.add( boxanimamesh2 );
+
+        function boxtl2(){
+            this.boxtl2 = new TimelineMax();//13s gap 
+            this.boxtl2.to(boxanimamesh2.scale, .2, { x:.8, y:.8, z:.8, ease: Expo.easeOut})
+            this.boxtl2.to(boxanimamesh2.scale, .2, { x:1, y:1, z:1, ease: Expo.easeOut})
+            this.boxtl2.to(boxanimamesh2.position, 1, { x:0, y:40, z:60, ease: Expo.easeOut},)
+            this.boxtl2.to(boxanimamesh2.rotation, .5, { x: Math.PI*.855, ease: Expo.easeOut},'.5')
+            this.boxtl2.to(boxanimamesh2.scale, 1, { y: 4, x: 8, z: .1,  ease: Expo.easeOut},) 
+            this.boxtl2.to(boxanimamesh2.scale, 6, { y: 4, x: 8, z: .1,  ease: Expo.easeOut},) 
+            this.boxtl2.to(boxanimamesh2.scale, .5, { y: 1, x: 1, z: 1,  ease: Expo.easeOut},) 
+            this.boxtl2.to(boxanimamesh2.rotation, .5, { x: 0, ease: Expo.easeOut})
+            this.boxtl2.to(boxanimamesh2.position, .5, { x:-30, y:-32, z:68, ease: Expo.easeOut})
+        }
+        // boxtl2();
+
+
+        var boxanima = new THREE.BoxGeometry(20 ,20 ,20 );
+        var boxanimamaterial = [
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box31.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box31.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box32.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box31.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box31.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/solu1.png '), shading:THREE.FlatShading, }),
+            ]
+        boxanimamesh3 = new THREE.Mesh(boxanima, boxanimamaterial);
+        boxanimamesh3.position.set(28 ,-32 ,68);
+        scene.add( boxanimamesh3 );
+
+        function boxtl3(){
+            this.boxtl3 = new TimelineMax();
+            this.boxtl3.to(boxanimamesh3.scale, .2, { x:.8, y:.8, z:.8, ease: Expo.easeOut})
+            this.boxtl3.to(boxanimamesh3.scale, .2, { x:1, y:1, z:1, ease: Expo.easeOut})
+            this.boxtl3.to(boxanimamesh3.position, 1, { x:0, y:40, z:60, ease: Expo.easeOut},)
+            this.boxtl3.to(boxanimamesh3.rotation, .5, { x: Math.PI*.855, ease: Expo.easeOut},'.5')
+            this.boxtl3.to(boxanimamesh3.scale, 1, { y: 4, x: 8, z: .1,  ease: Expo.easeOut},) 
+            this.boxtl3.to(boxanimamesh3.scale, 6, { y: 4, x: 8, z: .1,  ease: Expo.easeOut},) 
+            this.boxtl3.to(boxanimamesh3.scale, .5, { y: 1, x: 1, z: 1,  ease: Expo.easeOut},) 
+            this.boxtl3.to(boxanimamesh3.rotation, .5, { x: 0, ease: Expo.easeOut})
+            this.boxtl3.to(boxanimamesh3.position, .5, { x:28, y:-32, z:68, ease: Expo.easeOut})
+        }
+        // boxtl3();
+
+        
+        var boxanima = new THREE.BoxGeometry(20 ,20 ,20 );
+        var boxanimamaterial = [
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box41.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box41.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box42.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box42.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/box41.png '), shading:THREE.FlatShading, }),
+            new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' pic/solu2.png '), shading:THREE.FlatShading, }),
+            ]
+        boxanimamesh4 = new THREE.Mesh(boxanima, boxanimamaterial);
+        boxanimamesh4.position.set(88 ,-32 ,68);
+        scene.add( boxanimamesh4 );
+
+        function boxtl4() {
+            this.boxtl4 = new TimelineMax();
+            this.boxtl4.to(boxanimamesh4.scale, .2, { x:.8, y:.8, z:.8, ease: Expo.easeOut})
+            this.boxtl4.to(boxanimamesh4.scale, .2, { x:1, y:1, z:1, ease: Expo.easeOut})
+            this.boxtl4.to(boxanimamesh4.position, 1, { x:0, y:40, z:60, ease: Expo.easeOut},)
+            this.boxtl4.to(boxanimamesh4.rotation, .5, { x: Math.PI*.855, ease: Expo.easeOut},'.5')
+            this.boxtl4.to(boxanimamesh4.scale, 1, { y: 4, x: 8, z: .1,  ease: Expo.easeOut},) 
+            this.boxtl4.to(boxanimamesh4.scale, 6, { y: 4, x: 8, z: .1,  ease: Expo.easeOut},) 
+            this.boxtl4.to(boxanimamesh4.scale, .5, { y: 1, x: 1, z: 1,  ease: Expo.easeOut},) 
+            this.boxtl4.to(boxanimamesh4.rotation, .5, { x: 0, ease: Expo.easeOut})
+            this.boxtl4.to(boxanimamesh4.position, .5, { x:88, y:-32, z:68, ease: Expo.easeOut})
+            // busgroup.position.set(0, -100, 100);
+        }
+        // boxtl4();
+
+
+
+        // plan a Click to trigger 4 mysterious boxes and boxplay
+        const domEvents = new THREEx.DomEvents(camera, renderer.domElement);
+        domEvents.addEventListener(boxplaymesh, 'click', event =>{
+            boxplaytl();
+        })
+
+        const domEvents1 = new THREEx.DomEvents(camera, renderer.domElement);
+        domEvents1.addEventListener(boxanimamesh1, 'click', event =>{
+            boxtl1();
+        })
+
+        const domEvents2 = new THREEx.DomEvents(camera, renderer.domElement);
+        domEvents2.addEventListener(boxanimamesh2, 'click', event =>{
+            boxtl2();
+        })
+
+        const domEvents3 = new THREEx.DomEvents(camera, renderer.domElement);
+        domEvents3.addEventListener(boxanimamesh3, 'click', event =>{
+            boxtl3();
+        })
+
+        const domEvents4 = new THREEx.DomEvents(camera, renderer.domElement);
+        domEvents4.addEventListener(boxanimamesh4, 'click', event =>{
+            boxtl4();
+        })
+
+        
+        // no use plan B: create a click box to play timelinemax for boxtl1234, 
+        // finally learn the threex library and didn't need this.
+        // plan b
+        // document.body.addEventListener('click',() => {
+        //     // scene.remove(boxplaymesh);
+        //     // boxplaytl();
+        //     // boxtl1();
+        //     // boxtl2();
+        //     // boxtl3();
+        //     // boxtl4();
+        // })
+
+
+
+        // Create the Thames river by using another cylindergeometry 
+        // Through the study of reference materials, ripples are added to the surface of the water.
+        // https://tympanus.net/codrops/2016/04/26/the-aviator-animating-basic-3d-scene-threejs/
+        river = function(){
+            var river = new THREE.CylinderGeometry( 800, 800, 200, 28, 10 );
+            river.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI/2));
+
+            river.mergeVertices();
+            var l = river.vertices.length;
+            this.waves = [];
+
+            for (var i=0; i<l; i++){
+                var v = river.vertices[i];
+                this.waves.push({y:v.y,
+                                x:v.x,
+                                z:v.z,
+                                ang: Math.random()*Math.PI*20,
+                                amp:2 + Math.random()*1,  
+                                speed:0.068 + Math.random()*0.032
+                            });
+            };
+            var rivermaterial = new THREE.MeshPhongMaterial({color:Colors.river,transparent:true,opacity:0.44,shading:THREE.FlatShading,});
+            this.rivermesh = new THREE.Mesh(river, rivermaterial);
+            this.rivermesh.receiveShadow = true; 
+        }
+
+
+
+        // trying to create the wave in CylinderGeometry
+        river.prototype.moveWaves = function (){
+
+            var verts = this.rivermesh.geometry.vertices;
+            var l = verts.length;
+            
+            for (var i=0; i<l; i++){
+                var v = verts[i];
+                
+                var vprops = this.waves[i];
+                
+                v.x = vprops.x + Math.cos(vprops.ang)*vprops.amp;
+                v.y = vprops.y + Math.sin(vprops.ang)*vprops.amp;
+
+                vprops.ang += vprops.speed;
+            }
+
+            // Tell the renderer that the geometry of the sea has changed.
+            this.rivermesh.geometry.verticesNeedUpdate=true;
+            // sea.rivermesh.rotation.z += .005;
+        }       
+        function createriver(){
+
+            river = new river();
+            river.rivermesh.position.y = -850;
+            scene.add(river.rivermesh);
+        }
+        createriver();
+
+
+
+        // Create the cloud by learning from
+        // https://tympanus.net/codrops/2016/04/26/the-aviator-animating-basic-3d-scene-threejs/
+        Cloud = function(){
+
+            // Create an empty container that will hold the different parts of the cloud
+            this.mesh = new THREE.Object3D();
+            var geom = new THREE.BoxGeometry(9, 9, 6);
+            var mat = new THREE.MeshBasicMaterial({color:0xffffff});
+            
+            // duplicate the geometry a random number of times
+            var nBlocs = 3 + Math.floor(Math.random()*3);
+            for (var i=0; i<nBlocs; i++ ){
+                
+                var m = new THREE.Mesh(geom, mat); 
+                
+                // set the position and the rotation of each cube randomly
+                m.position.x = i * 15;
+                m.position.y = Math.random()* 10;
+                m.position.z = Math.random()* 10;
+                m.rotation.z = Math.random()* Math.PI * 2;
+                m.rotation.y = Math.random()* Math.PI * 2;
+                
+                // set the size of the cube randomly
+                var s = .01 + Math.random()*.6;
+                m.scale.set(s,s,s);
+
+                // add the cube to the container we first created
+                this.mesh.add(m);
+            } 
+        }
+
+
+        Sky = function(){
+            // Create an empty container
+            this.mesh = new THREE.Object3D();
+            // choose a number of clouds to be scattered in the sky
+            this.nClouds = 20;
+            // To distribute the clouds
+            var stepAngle = Math.PI*2 / this.nClouds;
+
+            // create the clouds
+            for(var i=0; i<this.nClouds; i++){
+                var c = new Cloud();
+                // set the rotation and the position of each cloud;
+                var a = stepAngle*i; // this is the final angle of the cloud
+                var h = 750 + Math.random()*200; // this is the distance between the center of the axis and the cloud itself
+
+                // converting polar coordinates (angle, distance) into Cartesian coordinates (x, y)
+                c.mesh.position.y = Math.sin(a)*h;
+                c.mesh.position.x = Math.cos(a)*h;
+
+                // rotate the cloud according to its position
+                c.mesh.rotation.z = a + Math.PI/2 + 996;
+
+                // at random depths inside of the scene
+                c.mesh.position.z = -400 - Math.random()*400;
+                
+                // we also set a random scale for each cloud
+                var s = 1+Math.random()*2;
+                c.mesh.scale.set(s,s,s);
+
+                // do not forget to add the mesh of each cloud in the scene
+                this.mesh.add(c.mesh);  
+            }  
+        }
+        sky = new Sky();
+        sky.mesh.position.y = - 778;
+        scene.add(sky.mesh);
+
+            
+
+        // render function also like a loop function
+        function render() {
+
+            boxplaymesh.rotation.x += 0.01;
+            boxplaymesh.rotation.y += 0.01;
+
+            // for the bus wheels
+            wheelmesh.rotation.y += Math.random() * 0.3;
+            wheelmesh1.rotation.y += Math.random() * 0.3;
+            wheelmesh.position.y = -44 + Math.random() * 1 ;
+            wheelmesh1.position.y = -44 + Math.random() * 1 ;
+            wheelmesh2.rotation.y += Math.random() * 0.3;
+            wheelmesh3.rotation.y += Math.random() * 0.3;
+            wheelmesh2.position.y = -44 + Math.random() * 1 ;
+            wheelmesh3.position.y = -44 + Math.random() * 1 ;
+
+            // for the bus movement
+            busplay();
+
+            // for the road rotation
+            roadmesh.rotation.y -= -.01;
+
+            // for the sky cloud rotation
+            sky.mesh.rotation.z += .02;
+
+            // for the riverwaves
+            river.moveWaves();
+
+            requestAnimationFrame( render );
+            renderer.render( scene, camera );
+        }
+
+        render();
+         
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // end
+
+
+
+
+        // some old test geometry test(timelinemax, opacity, geometry, doubleside)
+        function oldtest(){
+        //mesh1test 右侧的
+        function mesh1test(){
+        var geometry1 = new THREE.BoxGeometry( 1, 1, 1 );
+        var material1 = new THREE.MeshBasicMaterial( { color: 0xffffff } );
+        var mesh1 = new THREE.Mesh( geometry1, material1 );
+        mesh1.position.set(5,-0.5,4);
+        scene.add( mesh1 );
+        this.tl = new TimelineMax();
+            //this.tl.to(mesh1.position, 5, { x:10, ease: Expo.easeOut})
+            //this.tl.to(mesh1.position, 5, { x:-10, ease: Expo.easeOut})
+        }
+        mesh1test();
+
+        function mesh2test(){
+        var length = 1.2, width = 0.8;
+        var shape = new THREE.Shape();
+        shape.moveTo( 0,0 );
+        shape.lineTo( 0, width );
+        shape.lineTo( length, width );
+        shape.lineTo( length, 0 );
+        shape.lineTo( 0, 0 );
+
+        var extrudeSettings = {
+        	steps: 2,
+        	depth: 1.6,
+        	bevelEnabled: true,
+        	bevelThickness: 1,
+        	bevelSize: 1,
+        	bevelOffset: 0,
+        	bevelSegments: 1
+        };
+
+        var geometry2 = new THREE.ExtrudeBufferGeometry( shape, extrudeSettings );
+        var material2 = new THREE.MeshLambertMaterial( { color: 0x00ff00 } );
+        var mesh2 = new THREE.Mesh( geometry2, material2 ) ;
+        //mesh2.position.set(9, 9, -2);
+        scene.add( mesh2 );
+        }
+        mesh2test();
+
+        // // add plane geometry  左侧的
+        // function planetest(){
+        // var planegeometry = new THREE.PlaneGeometry(1, 1, 1);
+        // //var planeTextureLoader = new THREE.TextureLoader();
+        // //var planeTexture = planeTextureLoader.load(' test.png ');
+        // //var planematerial = new THREE.MeshPhongMaterial({map: planeTexture});
+
+
+        var planematerial = [
+        //new THREE.MeshBasicMaterial({color: 0xffff00, side: THREE.FrontSide}),//R
+        //new THREE.MeshBasicMaterial( {map: new THREE.ImageLoader().load(' london.png ')}),//L
+        //new THREE.MeshBasicMaterial({color: 0xffff00, side: THREE.FrontSide}),//T
+        //new THREE.MeshBasicMaterial({color: 0xffff00, side: THREE.FrontSide}),//Bottom
+        //new THREE.MeshBasicMaterial({color: 0xffff00, side: THREE.FrontSide}),//F
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' london.png '), side: THREE.DoubleSide, opacity: 1, transparent: true,}),//L
+
+        //new THREE.MeshBasicMaterial({color: 0xffffff, side: THREE.BackSide, opacity: .1, transparent: true,}),//Back
+        ];
+        var planemesh = new THREE.Mesh(planegeometry, planematerial);
+        planemesh.position.set(-5,0,0);
+        scene.add( planemesh )
+        planemesh.scale.set(2,2,2);
+        }
+        // planetest();
+        
+
+        function threejs1()
+        {
+        var geometry = new THREE.BoxGeometry(1, 1, 1);
+        var material = new THREE.MeshLambertMaterial({color: 0xF7F7F7});
+        meshX = -10;
+        for(var i = 0; i<15;i++) {
+            var mesh = new THREE.Mesh(geometry, material);
+            mesh.position.x = (Math.random() - 0.5) * 10;
+            mesh.position.y = (Math.random() - 0.5) * 10;
+            mesh.position.z = (Math.random() - 0.5) * 10;
+            scene.add(mesh);
+            meshX+=1;
+        }
+        }
+
+
+
+
+
+        /*  Tried many times，I hope to be able to click on a specific box，trigger specific boxtl[i]();
+        var raycaster = new THREE.Raycaster();
+        var mouse = new THREE.Vector2();
+        function onMouseMove(event) {
+            event.preventDefault();
+            mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+            mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            var intersects = raycaster.intersectObjects(scene.children, true);
+            for (var i = 0; i < intersects.length; i++) {         
+                // this.boxtl + 'intersects[i]'.play();
+                // this.tl = new TimelineMax();
+                // this.tl.to(intersects[i].object.position, .5, { x:0, y:40, z:60, ease: Expo.easeOut})
+                // this.tl.to(intersects[i].object.position, 10, { x:0, y:40, z:60, ease: Expo.easeOut})
+                // this.tl.to(intersects[i].object.scale, 1, { y: 4, x: 8, z: .1,  ease: Expo.easeOut},'+.5') 
+                // this.tl.to(intersects[i].object.rotation, 1, { x: Math.PI*.855, ease: Expo.easeOut},'-1')
+                // this.tl.to(intersects[i].object.scale, .5, { y: 1, x: 1, z: 1,  ease: Expo.easeOut},) 
+                // this.tl.to(intersects[i].object.rotation, .5, { x: 0, ease: Expo.easeOut})
+                // this.tl.to(intersects[i].object.position, .5, { x:88, y:-32, z:68, ease: Expo.easeOut})
+            }
+        }
+        window.addEventListener('click', onMouseMove);
+        */
+
+
+        /*can't load mtlfiles
+        var legoObj;
+        var mtlLoader = new THREE.MTLLoader();
+        mtlLoader.load('model/lego.mtl', function (materials) {
+            materials.preload();
+            // Load the object
+            var objLoader = new THREE.OBJLoader();
+            objLoader.setMaterials(materials);
+            objLoader.load('model/lego.obj', function (object) {
+            scene.add(object);
+            ourObj = object;
+            object.position.z = 1;
+            object.scale = 10;
+            object.rotation.y = 1.2;
+            });
+        });
+        *
+
+
+        //Failed to add mtl again
+        // var phoneObj;
+        // var mtlLoader = new THREE.MTLLoader();
+        // mtlLoader.load('model/london-phone-booth/source/london.obj/mesh.mtl', function (materials) {
+        //     materials.preload();
+            
+        //     // Load the object
+        //     var objLoader = new THREE.OBJLoader();
+        //     objLoader.setMaterials(materials);
+        //     // MtlObjBridge.addMaterialsFromMtlLoader
+        //     objLoader.load('model/london-phone-booth/source/london.obj/mesh.obj', function (object) {
+        //     scene.add(object);
+        //     ourObj = object;
+        //     object.position.z = 1;
+        //     object.scale = 10;
+        //     object.rotation.y = 1.2;
+        //     });
+        // });
+
+        
+
+        // load the gltf success
+        // Finally decided to give up load model because the texture is difficult to adjust.
+        // var loader = new THREE.GLTFLoader();
+        // loader.load('model/red_post_box/scene.gltf', function (gltf) {
+        // var content = gltf.scene;
+        // content.traverse((node) => {
+        //     if (!node.isMesh) return;
+        //     node.material.side = THREE.DoubleSide;
+        //     node.material.alphaTest = 0.25;
+        //     node.material.needsUpdate = true;
+        // });
+        // scene.add(content);
+        // content.scale.set(10,10,10);
+        // content.position.set(0,0,-50);
+        // }, undefined, function (e) {
+        // console.error();
+        // });
+
+
+
+        // Failed attempt to create an oval(postbox top)
+        // var path = new THREE.Shape();
+        // path.absellipse(0,0,2,16,0, Math.PI*2, false,0);
+        // var geometry = new THREE.ShapeBufferGeometry( path );
+        // var material = new THREE.MeshBasicMaterial( { color: 0x59d1c1} );
+        // var ellipse = new THREE.Mesh( geometry, material );
+        // scene.add(ellipse);
+
+
+
+        // Failed attempt to create an oval(postbox top)
+        // var curve = new THREE.EllipseCurve(
+        // 0,  0,            // ax, aY
+        // 2, 16,           // xRadius, yRadius
+        // 0,  2 * Math.PI,  // aStartAngle, aEndAngle
+        // false,            // aClockwise
+        // 0                 // aRotation
+        // );
+        // var path = new THREE.Path( curve.getPoints( 50 ) );
+        // var geometry = path.createPointsGeometry( 50 );
+        // var material = new THREE.MeshBasicMaterial( { color : 0x59d1c1} );
+        // var ellipse = new THREE.Line( geometry, material );
+        // scene.add(ellipse);
+
+
+
+        // Try to group the postbox and the road and rotate them together, but the center of rotation will change. 
+        // After that, try to rotate the postbox along the road (rotation and position at the same time) without grouping, 
+        //and try to convert the polar coordinate system and the rectangular coordinate system, but finally failed.
+        // var roadgroup1 = new THREE.Group();
+        // roadgroup1.add( boxgroup );
+        // roadgroup1.add( roadmesh );
+        // scene.add( roadgroup1 );
+        // var a = time; 
+		// var h = -410; 
+		// boxgroup.position.y = Math.sin(a)*h;
+		// boxgroup.position.x = Math.cos(a)*h;
+		// boxgroup.rotation.z = a + Math.PI/2;
+		// boxgroup.position.z = -410-Math.random()*400;
+
+
+
+        // //oldtest meshanima
+        // function mesh2anima(){
+        // this.tl = new TimelineMax().delay(.8);
+        // //to和from是起始状态的不同，数字number是动画持续时间的长短，{大括号内的x：表示在x轴上拉伸或者移动，‘= -3’代表延时3秒?}
+        // this.tl.to(planemesh.scale, 1, { x:2, ease: Expo.easeOut}, '= .5')
+        // this.tl.to(planemesh.scale, 1, { x: 1,  ease: Expo.easeOut})
+        // this.tl.to(planemesh.position, 1, { y: 1,  ease: Expo.easeOut}, '=-.3') 
+        // this.tl.to(planemesh.rotation, 2, { y: Math.PI*.5, ease: Expo.easeOut}, '=-.9')
+        // //this.tl.from(mesh2.position, 1, {y: 2, ease: Expo.easeOut})
+        // //this.tl.from(mesh2.position, 1, {y: 2, ease: Expo.easeOut}, '= -3')
+        // }
+
+
+        /*oldtest busmesh
+        var bus = new THREE.BoxGeometry(500, 200, 110);
+        var busmaterial =     [
+        new THREE.MeshBasicMaterial({color: 0xff0000, side: THREE.FrontSide}),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' test.png '), side: THREE.DoubleSide}),
+        new THREE.MeshBasicMaterial({color: 0xff0000, side: THREE.FrontSide}),
+        new THREE.MeshBasicMaterial({color: 0xffff00, side: THREE.FrontSide}),
+        new THREE.MeshBasicMaterial({map: new THREE.TextureLoader().load(' londonbusfront.png '), side: THREE.DoubleSide}),
+        new THREE.MeshBasicMaterial({color: 0xffff00, side: THREE.FrontSide}),
+        ];
+        const busmesh = new THREE.Mesh(bus, busmaterial);
+        //scene.add(busmesh);
+        */
+
+        // boxgroup.geometry.center(0,-410,0);
+        // this.boxtl = new TimelineMax().delay(.3);
+        // this.boxtl.to(boxgroup.position, 1, { z:.1, ease: Expo.easeOut})
+        // this.boxtl.to(boxgroup.position, 1, { y: 20,  ease: Expo.easeOut},'-2') 
+        // this.boxtl.to(boxgroup.rotation, 1, { z:-.1, ease: Expo.easeOut})
+        // this.boxtl.to(boxgroup.position, 1, { y: 60,  ease: Expo.easeOut},'-2') 
+        // this.boxtl.to(boxgroup.rotation, 1, { z:.1, ease: Expo.easeOut})
+        // this.boxtl.to(boxgroup.rotation, 1, { z:-.1, ease: Expo.easeOut})  
+
+
+      
+	</script>
+</body>
+
+</html>
+
+
+
+
